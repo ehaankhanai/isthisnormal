@@ -12,14 +12,6 @@ export function HeroSection() {
 
       <div className="container relative z-10 py-20">
         <div className="max-w-3xl mx-auto text-center animate-fade-in-up">
-          {/* Trust badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card shadow-card border border-border/50 mb-8">
-            <Lock className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-muted-foreground">
-              100% Anonymous • No Login Required
-            </span>
-          </div>
-
           {/* Main headline */}
           <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-bold text-foreground leading-tight mb-6">
             Wondering if what you're feeling is{" "}
