@@ -17,56 +17,26 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Mock response - in production, this would come from the AI
-const mockResponse = {
-  acknowledgement: "Thank you for sharing this with us. It takes courage to ask about something that's been on your mind. Many people experience similar feelings but hesitate to talk about them — you're not alone in wondering about this.",
-  commonality: "This type of symptom is actually quite common, especially among people in similar situations. Studies suggest that a significant portion of the population experiences something like this at some point.",
-  possibleExplanations: [
-    "Stress or anxiety, which can cause physical sensations in the body",
-    "Changes in sleep patterns or sleep quality",
-    "Dietary factors or dehydration",
-    "Normal bodily variations that happen to everyone",
-    "Environmental factors like weather changes or seasonal shifts"
-  ],
-  usuallyOkayIf: [
-    "The symptom is mild and doesn't interfere with daily activities",
-    "It comes and goes rather than being constant",
-    "You're not experiencing other concerning symptoms",
-    "It improves with rest or basic self-care"
-  ],
-  seekHelpIf: [
-    "The symptom is severe or getting worse over time",
-    "It's accompanied by fever, sudden pain, or difficulty breathing",
-    "It significantly impacts your daily life or sleep",
-    "You feel something is seriously wrong (trust your instincts)"
-  ],
-  selfCareSteps: [
-    "Keep track of when the symptom occurs and what might trigger it",
-    "Ensure you're getting adequate sleep and staying hydrated",
-    "Try gentle relaxation techniques like deep breathing",
-    "Consider whether recent stress might be a factor",
-    "Give it a few days of monitoring before becoming concerned"
-  ],
-  similarQuestions: 1247
-};
+import { SymptomAnalysis } from "@/lib/api/symptoms";
 
 export default function Response() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
   const symptomData = location.state?.symptomData;
+  const analysis: SymptomAnalysis | undefined = location.state?.analysis;
 
   useEffect(() => {
-    if (!symptomData) {
+    if (!symptomData || !analysis) {
       navigate("/check");
     }
-  }, [symptomData, navigate]);
+  }, [symptomData, analysis, navigate]);
 
-  if (!symptomData) return null;
+  if (!symptomData || !analysis) return null;
 
   const handleShare = () => {
-    const shareText = "I asked 'Is This Normal?' and felt more at ease. Try it yourself — it's anonymous and reassuring.";
+    const shareText = "I asked 'Is This Normal?' about something I was worried about and felt more at ease. Try it yourself — it's anonymous and reassuring.";
     
     if (navigator.share) {
       navigator.share({
@@ -97,6 +67,33 @@ export default function Response() {
               Ask another question
             </Link>
 
+            {/* What they asked */}
+            <Card className="mb-6 shadow-card bg-muted/50 animate-fade-in">
+              <CardContent className="py-4">
+                <p className="text-sm text-muted-foreground mb-1">You asked about:</p>
+                <p className="text-foreground font-medium">"{symptomData.text}"</p>
+                {(symptomData.bodyArea || symptomData.duration || symptomData.ageRange) && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {symptomData.bodyArea && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-primary-light text-primary">
+                        {symptomData.bodyArea}
+                      </span>
+                    )}
+                    {symptomData.duration && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-primary-light text-primary">
+                        {symptomData.duration}
+                      </span>
+                    )}
+                    {symptomData.ageRange && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-primary-light text-primary">
+                        {symptomData.ageRange}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Section 1: Emotional Acknowledgement */}
             <Card className="mb-6 shadow-medium animate-fade-in-up border-l-4 border-l-primary">
               <CardHeader className="pb-2">
@@ -107,7 +104,7 @@ export default function Response() {
               </CardHeader>
               <CardContent>
                 <p className="text-foreground leading-relaxed">
-                  {mockResponse.acknowledgement}
+                  {analysis.acknowledgement}
                 </p>
               </CardContent>
             </Card>
@@ -122,12 +119,12 @@ export default function Response() {
               </CardHeader>
               <CardContent>
                 <p className="text-foreground leading-relaxed mb-4">
-                  {mockResponse.commonality}
+                  {analysis.commonality}
                 </p>
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-primary-light">
                   <Users className="h-5 w-5 text-primary" />
                   <span className="text-sm font-medium text-primary">
-                    {mockResponse.similarQuestions.toLocaleString()} people have asked similar questions
+                    {analysis.similarQuestions.toLocaleString()} people have asked similar questions
                   </span>
                 </div>
               </CardContent>
@@ -146,7 +143,7 @@ export default function Response() {
                   These are common, non-diagnostic possibilities — not a diagnosis:
                 </p>
                 <ul className="space-y-2">
-                  {mockResponse.possibleExplanations.map((explanation, index) => (
+                  {analysis.possibleExplanations.map((explanation, index) => (
                     <li key={index} className="flex items-start gap-3">
                       <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
                       <span className="text-foreground">{explanation}</span>
@@ -167,7 +164,7 @@ export default function Response() {
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2">
-                    {mockResponse.usuallyOkayIf.map((item, index) => (
+                    {analysis.usuallyOkayIf.map((item, index) => (
                       <li key={index} className="flex items-start gap-2 text-sm">
                         <CheckCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                         <span className="text-foreground">{item}</span>
@@ -186,7 +183,7 @@ export default function Response() {
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2">
-                    {mockResponse.seekHelpIf.map((item, index) => (
+                    {analysis.seekHelpIf.map((item, index) => (
                       <li key={index} className="flex items-start gap-2 text-sm">
                         <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                         <span className="text-foreground">{item}</span>
@@ -207,7 +204,7 @@ export default function Response() {
               </CardHeader>
               <CardContent>
                 <ol className="space-y-3">
-                  {mockResponse.selfCareSteps.map((step, index) => (
+                  {analysis.selfCareSteps.map((step, index) => (
                     <li key={index} className="flex items-start gap-3">
                       <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm font-bold shrink-0">
                         {index + 1}

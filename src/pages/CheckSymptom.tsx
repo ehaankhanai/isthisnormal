@@ -3,7 +3,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { 
   Send, 
   Shield, 
@@ -12,15 +12,15 @@ import {
   User, 
   ChevronDown, 
   ChevronUp,
-  Loader2,
-  AlertTriangle
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { analyzeSymptom, SymptomData } from "@/lib/api/symptoms";
 
 const bodyAreas = [
   "Head/Face", "Neck", "Chest", "Stomach/Abdomen", 
-  "Back", "Arms/Hands", "Legs/Feet", "Skin", "General/All over"
+  "Back", "Arms/Hands", "Legs/Feet", "Skin", "Hair/Scalp", "General/All over"
 ];
 
 const durations = [
@@ -30,6 +30,12 @@ const durations = [
 
 const ageRanges = [
   "Under 18", "18-25", "26-35", "36-45", "46-55", "55+"
+];
+
+// Crisis keywords that should trigger emergency redirect
+const crisisKeywords = [
+  "suicide", "kill myself", "end my life", "self-harm", 
+  "hurt myself", "don't want to live", "want to die"
 ];
 
 export default function CheckSymptom() {
@@ -63,7 +69,6 @@ export default function CheckSymptom() {
     }
 
     // Check for crisis keywords
-    const crisisKeywords = ["suicide", "kill myself", "end my life", "self-harm", "hurt myself", "don't want to live"];
     const hasCrisisIndicator = crisisKeywords.some(keyword => 
       symptomText.toLowerCase().includes(keyword)
     );
@@ -75,20 +80,32 @@ export default function CheckSymptom() {
 
     setIsSubmitting(true);
 
-    // Store the symptom data for the response page
-    const symptomData = {
+    const symptomData: SymptomData = {
       text: symptomText,
-      bodyArea: selectedBodyArea,
-      duration: selectedDuration,
-      ageRange: selectedAge,
+      bodyArea: selectedBodyArea || undefined,
+      duration: selectedDuration || undefined,
+      ageRange: selectedAge || undefined,
       timestamp: new Date().toISOString(),
     };
 
-    // For now, navigate to response page with state
-    // In production, this would call the AI endpoint
-    setTimeout(() => {
-      navigate("/response", { state: { symptomData } });
-    }, 1500);
+    try {
+      const analysis = await analyzeSymptom(symptomData);
+      navigate("/response", { 
+        state: { 
+          symptomData,
+          analysis 
+        } 
+      });
+    } catch (error) {
+      console.error('Error analyzing symptom:', error);
+      toast({
+        title: "Something went wrong",
+        description: error instanceof Error ? error.message : "Please try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -112,7 +129,7 @@ export default function CheckSymptom() {
             <Card className="shadow-medium animate-fade-in-up mb-6">
               <CardContent className="p-6">
                 <Textarea
-                  placeholder="Example: I've been feeling a tightness in my chest at night, especially when I lie down. It's been happening for about a week..."
+                  placeholder="Example: I've noticed increased hair fall when I shower or brush my hair. It's been happening for about 2 weeks..."
                   value={symptomText}
                   onChange={(e) => setSymptomText(e.target.value)}
                   className="min-h-[160px] text-base mb-4"
@@ -238,7 +255,7 @@ export default function CheckSymptom() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    Analyzing...
+                    Analyzing your question...
                   </>
                 ) : (
                   <>
