@@ -5,6 +5,85 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Allowed values for enum fields
+const ALLOWED_BODY_AREAS = [
+  'Head/Face', 'Neck', 'Chest', 'Abdomen', 'Back', 
+  'Arms/Hands', 'Legs/Feet', 'Skin', 'Other'
+];
+
+const ALLOWED_DURATIONS = [
+  'Just started', 'Few hours', 'Few days', 
+  'About a week', 'Longer than a week'
+];
+
+const ALLOWED_AGE_RANGES = [
+  'Under 18', '18-30', '31-45', '46-60', 'Over 60'
+];
+
+// Simple in-memory rate limiting (resets on function cold start)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+  
+  entry.count++;
+  return true;
+}
+
+function sanitizeInput(input: string): string {
+  // Remove characters that could be used for prompt injection
+  return input
+    .replace(/[\\]/g, '') // Remove backslashes
+    .replace(/\n/g, ' ')  // Replace newlines with spaces
+    .trim();
+}
+
+function validateSymptomText(text: unknown): { valid: boolean; error?: string; sanitized?: string } {
+  if (!text || typeof text !== 'string') {
+    return { valid: false, error: 'Symptom description is required' };
+  }
+  
+  const trimmed = text.trim();
+  
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Symptom description cannot be empty' };
+  }
+  
+  if (trimmed.length > 500) {
+    return { valid: false, error: 'Symptom description must be less than 500 characters' };
+  }
+  
+  return { valid: true, sanitized: sanitizeInput(trimmed) };
+}
+
+function validateEnumField(value: unknown, allowedValues: string[], fieldName: string): { valid: boolean; error?: string; value?: string } {
+  if (value === undefined || value === null || value === '') {
+    return { valid: true }; // Optional fields
+  }
+  
+  if (typeof value !== 'string') {
+    return { valid: false, error: `Invalid ${fieldName}` };
+  }
+  
+  if (!allowedValues.includes(value)) {
+    return { valid: false, error: `Invalid ${fieldName}` };
+  }
+  
+  return { valid: true, value };
+}
+
 const SYSTEM_PROMPT = `You are a compassionate, knowledgeable health information assistant for an app called "Is This Normal?". Your role is to provide calm, reassuring, and helpful information about symptoms people are curious or worried about.
 
 CRITICAL RULES:
@@ -34,11 +113,52 @@ serve(async (req) => {
   }
 
   try {
-    const { symptomText, bodyArea, duration, ageRange } = await req.json();
-
-    if (!symptomText) {
+    // Rate limiting
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('x-real-ip') || 
+                     'unknown';
+    
+    if (!checkRateLimit(clientIp)) {
+      console.log(`Rate limit exceeded for IP: ${clientIp}`);
       return new Response(
-        JSON.stringify({ error: 'Symptom description is required' }),
+        JSON.stringify({ error: 'Too many requests. Please try again in a minute.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const body = await req.json();
+    const { symptomText, bodyArea, duration, ageRange } = body;
+
+    // Validate symptom text
+    const symptomValidation = validateSymptomText(symptomText);
+    if (!symptomValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: symptomValidation.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate enum fields
+    const bodyAreaValidation = validateEnumField(bodyArea, ALLOWED_BODY_AREAS, 'body area');
+    if (!bodyAreaValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: bodyAreaValidation.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const durationValidation = validateEnumField(duration, ALLOWED_DURATIONS, 'duration');
+    if (!durationValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: durationValidation.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const ageRangeValidation = validateEnumField(ageRange, ALLOWED_AGE_RANGES, 'age range');
+    if (!ageRangeValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: ageRangeValidation.error }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -47,19 +167,20 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       console.error('LOVABLE_API_KEY is not configured');
       return new Response(
-        JSON.stringify({ error: 'AI service not configured' }),
+        JSON.stringify({ error: 'Service temporarily unavailable' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Build the user message with context
-    let userMessage = `The user is asking about this symptom: "${symptomText}"`;
-    if (bodyArea) userMessage += `\nBody area: ${bodyArea}`;
-    if (duration) userMessage += `\nDuration: ${duration}`;
-    if (ageRange) userMessage += `\nAge range: ${ageRange}`;
-    userMessage += `\n\nProvide helpful, symptom-specific information. Remember to be specific about "${symptomText}" - do NOT give generic responses.`;
+    // Build the user message with sanitized context
+    const sanitizedSymptom = symptomValidation.sanitized!;
+    let userMessage = `The user is asking about this symptom: "${sanitizedSymptom}"`;
+    if (bodyAreaValidation.value) userMessage += `\nBody area: ${bodyAreaValidation.value}`;
+    if (durationValidation.value) userMessage += `\nDuration: ${durationValidation.value}`;
+    if (ageRangeValidation.value) userMessage += `\nAge range: ${ageRangeValidation.value}`;
+    userMessage += `\n\nProvide helpful, symptom-specific information. Remember to be specific about "${sanitizedSymptom}" - do NOT give generic responses.`;
 
-    console.log('Processing symptom query:', userMessage);
+    console.log('Processing symptom query for body area:', bodyAreaValidation.value || 'not specified');
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -78,8 +199,7 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI gateway error:', response.status, errorText);
+      console.error('AI gateway error:', response.status);
       
       if (response.status === 429) {
         return new Response(
@@ -95,7 +215,7 @@ serve(async (req) => {
       }
       
       return new Response(
-        JSON.stringify({ error: 'Failed to analyze symptom' }),
+        JSON.stringify({ error: 'Unable to analyze symptom. Please try again.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -106,7 +226,7 @@ serve(async (req) => {
     if (!content) {
       console.error('No content in AI response');
       return new Response(
-        JSON.stringify({ error: 'No response from AI' }),
+        JSON.stringify({ error: 'Unable to generate response. Please try again.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -127,7 +247,7 @@ serve(async (req) => {
       }
       parsedResponse = JSON.parse(cleanContent.trim());
     } catch (parseError) {
-      console.error('Failed to parse AI response as JSON:', content);
+      console.error('Failed to parse AI response');
       // Return a fallback response
       parsedResponse = {
         acknowledgement: "Thank you for sharing this with us. It takes courage to ask about something that concerns you, and you're not alone in wondering about this.",
@@ -170,9 +290,9 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in analyze-symptom function:', error);
+    console.error('Error in analyze-symptom function:', error instanceof Error ? error.message : 'Unknown error');
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'An unexpected error occurred. Please try again.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
