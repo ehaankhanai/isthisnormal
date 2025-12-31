@@ -4,7 +4,6 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
-  Phone, 
   Heart, 
   MessageCircle, 
   Users,
@@ -12,30 +11,30 @@ import {
   ExternalLink
 } from "lucide-react";
 
-const helplines = [
+const wellnessTips = [
   {
-    name: "iCall (TISS)",
-    number: "9152987821",
-    description: "Professional counseling support",
-    hours: "Mon-Sat, 8am-10pm",
+    title: "Practice Deep Breathing",
+    description: "Try the 4-7-8 technique: breathe in for 4 seconds, hold for 7, exhale for 8. This activates your body's relaxation response.",
   },
   {
-    name: "Vandrevala Foundation",
-    number: "1860-2662-345",
-    description: "24/7 mental health support",
-    hours: "24 hours, 7 days",
+    title: "Ground Yourself",
+    description: "Use the 5-4-3-2-1 method: notice 5 things you see, 4 you can touch, 3 you hear, 2 you smell, and 1 you taste.",
   },
   {
-    name: "NIMHANS",
-    number: "080-46110007",
-    description: "National mental health helpline",
-    hours: "24 hours, 7 days",
+    title: "Move Your Body",
+    description: "Even a short 10-minute walk can boost your mood by releasing endorphins and reducing stress hormones.",
   },
   {
-    name: "Snehi",
-    number: "044-24640050",
-    description: "Emotional support helpline",
-    hours: "24 hours, 7 days",
+    title: "Stay Hydrated",
+    description: "Dehydration can worsen anxiety and fatigue. Aim for 8 glasses of water daily to support your mental clarity.",
+  },
+  {
+    title: "Connect with Someone",
+    description: "Reach out to a friend, family member, or colleague. Social connection is one of the most powerful ways to improve your mood.",
+  },
+  {
+    title: "Limit Screen Time Before Bed",
+    description: "Blue light disrupts sleep. Try to avoid screens 1 hour before bedtime for better rest and mental health.",
   },
 ];
 
@@ -77,39 +76,26 @@ export default function Emergency() {
               </CardContent>
             </Card>
 
-            {/* Helplines */}
+            {/* Wellness Tips */}
             <h2 className="font-display text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-              <Phone className="h-5 w-5 text-primary" />
-              Free & Confidential Support (India)
+              <Heart className="h-5 w-5 text-primary" />
+              Helpful Wellness Tips
             </h2>
 
             <div className="space-y-4 mb-8">
-              {helplines.map((helpline, index) => (
+              {wellnessTips.map((tip, index) => (
                 <Card 
-                  key={helpline.name} 
+                  key={tip.title} 
                   className="shadow-card hover:shadow-medium transition-all animate-fade-in-up"
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
                   <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-display font-bold text-foreground mb-1">
-                          {helpline.name}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          {helpline.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {helpline.hours}
-                        </p>
-                      </div>
-                      <a href={`tel:${helpline.number}`}>
-                        <Button variant="calm" size="sm" className="shrink-0">
-                          <Phone className="h-4 w-4" />
-                          {helpline.number}
-                        </Button>
-                      </a>
-                    </div>
+                    <h3 className="font-display font-bold text-foreground mb-2">
+                      {tip.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {tip.description}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
